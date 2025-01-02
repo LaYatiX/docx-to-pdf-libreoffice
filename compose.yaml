@@ -1,0 +1,49 @@
+services:
+  word-to-pdf-converter-1:
+    build: .
+    environment:
+      - SERVER_PORT=8080
+      - LIBREOFFICE_PATH=/usr/bin/soffice
+      - LIBREOFFICE_PORTS=2001, 2002, 2003, 2004, 2005, 2006
+      - --INPUT_PATH=/app/files/input-base
+      - --OUTPUT_PATH=/app/files/output
+      - --IDEMPOTENT_PATH=/app/files
+      - SPRING_ACTIVEMQ_BROKER_URL=tcp://activemq:61616
+    volumes:
+      - /home/grzegorz/word-docs:/app/files
+    depends_on:
+      - activemq
+
+  word-to-pdf-converter-2:
+    build: .
+    environment:
+      - SERVER_PORT=8080
+      - LIBREOFFICE_PATH=/usr/bin/soffice
+      - LIBREOFFICE_PORTS=2001, 2002, 2003, 2004, 2005, 2006
+      - --INPUT_PATH=/app/files/input-base
+      - --OUTPUT_PATH=/app/files/output
+      - --IDEMPOTENT_PATH=/app/files
+      - SPRING_ACTIVEMQ_BROKER_URL=tcp://activemq:61616
+    volumes:
+      - /home/grzegorz/word-docs:/app/files
+    depends_on:
+      - activemq
+
+  activemq:
+    image: webcenter/activemq:latest
+    ports:
+      - "61616:61616" # AMQP port
+      - "8161:8161"   # Web console port
+    environment:
+      - ACTIVEMQ_ADMIN_USER=admin
+      - ACTIVEMQ_ADMIN_PASSWORD=admin
+    volumes:
+      - activemq_data:/var/lib/activemq
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail -u admin:admin http://localhost:8161/admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+volumes:
+  activemq_data:
