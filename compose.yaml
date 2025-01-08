@@ -7,8 +7,8 @@ services:
       - LIBREOFFICE_PORTS=2001, 2002, 2003, 2004, 2005, 2006
       - --INPUT_PATH=/app/files/input-base
       - --OUTPUT_PATH=/app/files/output
-      - --IDEMPOTENT_PATH=/app/files
       - SPRING_ACTIVEMQ_BROKER_URL=tcp://activemq:61616
+      - SPRING_DATA_REDIS_HOST=redis
     volumes:
       - /home/grzegorz/word-docs:/app/files
     depends_on:
@@ -22,12 +22,21 @@ services:
       - LIBREOFFICE_PORTS=2001, 2002, 2003, 2004, 2005, 2006
       - --INPUT_PATH=/app/files/input-base
       - --OUTPUT_PATH=/app/files/output
-      - --IDEMPOTENT_PATH=/app/files
       - SPRING_ACTIVEMQ_BROKER_URL=tcp://activemq:61616
+      - SPRING_DATA_REDIS_HOST=redis
     volumes:
       - /home/grzegorz/word-docs:/app/files
     depends_on:
       - activemq
+
+  redis:
+    image: redis/redis-stack
+    ports:
+      - "8001:8001" # Web console port
+      - "6379:6379" # Redis port
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
 
   activemq:
     image: webcenter/activemq:latest
@@ -47,3 +56,4 @@ services:
       start_period: 20s
 volumes:
   activemq_data:
+  redis_data:

@@ -3,9 +3,10 @@ package pl.gpiwosz.wordpdfconverter.services;
 import org.jodconverter.core.DocumentConverter;
 import org.jodconverter.core.office.OfficeException;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import pl.gpiwosz.wordpdfconverter.config.TempDirConfig;
+import pl.gpiwosz.wordpdfconverter.enums.FileStatusEnum;
+import pl.gpiwosz.wordpdfconverter.repositories.RedisIdempotentRepository;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -13,14 +14,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Service responsible for converting files to PDF using LibreOffice via JODConverter.
  * This service uses an asynchronous approach to handle conversions.
  *
- *  @author Grzegorz Piwosz
- *  @version 1.0
- *  @since 2025-01-01
+ * @author Grzegorz Piwosz
+ * @version 1.0
+ * @since 2025-01-01
  */
 @Service
 public class LibreOfficeConverterService {
@@ -29,6 +31,9 @@ public class LibreOfficeConverterService {
   private final String outputPath;
   private final ExecutorService executor;
   private final TempDirConfig tempDirConfig;
+  private final RedisIdempotentRepository redisQueueIdempotentRepository;
+
+  private final AtomicInteger numberOfCurrentTasks = new AtomicInteger(0);
 
   /**
    * Constructs a new LibreOfficeConverterService.
@@ -37,11 +42,12 @@ public class LibreOfficeConverterService {
    * @param converter     The JODConverter DocumentConverter instance.
    * @param tempDirConfig The TempDirConfig instance for managing temporary files.
    */
-  public LibreOfficeConverterService(@Value("${output.path}") final String outputPath, final DocumentConverter converter, final TempDirConfig tempDirConfig) {
+  public LibreOfficeConverterService(@Value("${output.path}") final String outputPath, final DocumentConverter converter, final TempDirConfig tempDirConfig, RedisIdempotentRepository redisQueueIdempotentRepository) {
     this.converter = converter;
     this.outputPath = outputPath;
     this.tempDirConfig = tempDirConfig;
     this.executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    this.redisQueueIdempotentRepository = redisQueueIdempotentRepository;
   }
 
   /**
@@ -53,15 +59,18 @@ public class LibreOfficeConverterService {
    * @param fileName  The original file name.
    * @throws Exception If an error occurs during file processing or conversion. This includes exceptions thrown by the underlying JODConverter library.
    */
-  @Async
   public void convertFile(final byte[] fileBytes, final String fileName) throws Exception {
     File inputFile = createFileFromByteArray(fileBytes, fileName);
     String outputFileName = outputPath + "/" + fileName.substring(0, fileName.lastIndexOf('.')) + ".pdf";
     File outputFile = new File(outputFileName);
     executor.execute(() -> {
       try {
+        redisQueueIdempotentRepository.add(fileName, FileStatusEnum.PROCESSING.toString());
+        numberOfCurrentTasks.incrementAndGet();
         converter.convert(inputFile).to(outputFile).execute();
+        numberOfCurrentTasks.decrementAndGet();
         inputFile.delete();
+        redisQueueIdempotentRepository.add(fileName, FileStatusEnum.PROCESSED.toString());
       } catch (OfficeException e) {
         throw new RuntimeException(e); // Re-throw as RuntimeException so it is not necessary to handle it in caller method
       }
@@ -74,7 +83,7 @@ public class LibreOfficeConverterService {
    * @param data     The byte array containing the file content.
    * @param filePath The desired file path (used for creating the temporary file name).
    * @return The created temporary File object.
-   * @throws IOException          If an I/O error occurs during file creation.
+   * @throws IOException              If an I/O error occurs during file creation.
    * @throws IllegalArgumentException If the input byte array or file path is null or empty.
    */
   private File createFileFromByteArray(final byte[] data, final String filePath) throws IOException {
@@ -93,5 +102,9 @@ public class LibreOfficeConverterService {
       fos.write(data);
     }
     return file;
+  }
+
+  public AtomicInteger getNumberOfCurrentTasks() {
+    return numberOfCurrentTasks;
   }
 }

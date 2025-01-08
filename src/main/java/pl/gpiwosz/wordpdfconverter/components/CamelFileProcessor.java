@@ -2,6 +2,7 @@ package pl.gpiwosz.wordpdfconverter.components;
 
 import org.apache.camel.Headers;
 import org.springframework.stereotype.Component;
+import pl.gpiwosz.wordpdfconverter.repositories.RedisIdempotentRepository;
 import pl.gpiwosz.wordpdfconverter.services.LibreOfficeConverterService;
 import java.util.Map;
 
@@ -21,7 +22,7 @@ public class CamelFileProcessor {
    *
    * @param libreOfficeConverter The service used for converting files using LibreOffice.
    */
-  public CamelFileProcessor(LibreOfficeConverterService libreOfficeConverter) {
+  public CamelFileProcessor(LibreOfficeConverterService libreOfficeConverter, RedisIdempotentRepository redisQueueIdempotentRepository) {
     this.libreOfficeConverter = libreOfficeConverter;
   }
 
